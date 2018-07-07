@@ -16,6 +16,9 @@ namespace BoltToken
         [DisplayName("refund")]
         public static event Action<byte[], BigInteger> Refund;
 
+        [DisplayName("burn")]
+        public static event Action<byte[], BigInteger, byte[]> Burnt;
+
         // Constants
         private static readonly byte[] neoAssetID = { 155, 124, 255, 218, 166, 116, 190, 174, 15, 147, 14, 190, 96, 133, 175, 144, 147, 229, 254, 86, 179, 74, 92, 34, 12, 205, 207, 110, 252, 51, 111, 197 };
         private static readonly byte[] gasAssetID = { 231, 45, 40, 105, 121, 238, 108, 177, 183, 230, 93, 253, 223, 178, 227, 132, 16, 11, 141, 20, 142, 119, 88, 222, 66, 228, 22, 139, 113, 121, 44, 96 };
@@ -77,6 +80,11 @@ namespace BoltToken
                 {
                     var success = MintTokens(false);
                     return MintTokens(true) || success;
+                }
+                if (operation == "burnTokens")
+                {
+                    if (args.Length != 3) return false;
+                    return BurnTokens((byte[])args[0], (BigInteger)args[1], (byte[])args[1]);
                 }
                 if (operation == "setSaleConfig")
                 {
@@ -151,9 +159,9 @@ namespace BoltToken
             if (from.Length != 20 || to.Length != 20) return false;
             if (amount < 0) return false;
             if (!Runtime.CheckWitness(from) && from != ExecutionEngine.CallingScriptHash) return false;
+            if (!CanTransfer() && from != Owner) return false;
             if (from == to) return true;
             if (amount == 0) return true;
-            if (!CanTransfer() && from != Owner) return false;
 
             BigInteger balance = Storage.Get(Context(), from).AsBigInteger();
             if (balance < amount) return false;
@@ -195,6 +203,14 @@ namespace BoltToken
             Storage.Put(Context(), "totalSupply", mintedAmount + TotalSupply());
             Transferred(null, sender, mintedAmount);
             return true;
+        }
+
+        private static bool BurnTokens(byte[] address, BigInteger amount, byte[] data)
+        {
+            if (data.Length != 20) return false;
+            bool success = Transfer(address, null, amount);
+            if (success) Burnt(address, amount, data);
+            return success;
         }
 
         private static ulong ExchangeRate(bool useGas)
