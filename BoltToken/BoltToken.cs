@@ -112,7 +112,9 @@ namespace BoltToken
                 if (operation == "totalWhitelisted")
                 {
                     if (args.Length != 1) return false;
-                    return WhitelistTotalKey((string)args[0]).AsBigInteger();
+                    var tier = (string)args[0];
+                    if (tier != "1" || tier != "2") return false;
+                    return WhitelistTotalKey(tier).AsBigInteger();
                 }
                 if (operation == "enableTransfers")
                 {
@@ -323,6 +325,9 @@ namespace BoltToken
         {
             if (address.Length != 20) return false;
             if (IsInWhitelist(address, tier)) return false;
+            var totalKey = WhitelistTotalKey(tier);
+            var prevTotal = Storage.Get(Context(), totalKey).AsBigInteger();
+            Storage.Put(Context(), totalKey, prevTotal + 1);
             Storage.Put(Context(), WhitelistKey(address, tier), 1);
             return true;
         }
@@ -331,6 +336,9 @@ namespace BoltToken
         {
             if (address.Length != 20) return false;
             if (!IsInWhitelist(address, tier)) return false;
+            var totalKey = WhitelistTotalKey(tier);
+            var prevTotal = Storage.Get(Context(), totalKey).AsBigInteger();
+            Storage.Put(Context(), totalKey, prevTotal - 1);
             Storage.Delete(Context(), WhitelistKey(address, tier));
             return true;
         }
