@@ -190,19 +190,19 @@ namespace BoltToken
 
         private static bool MintTokens(bool useGas)
         {
-            byte[] sender = GetSender(false);
+            byte[] sender = GetSender(useGas);
             if (sender.Length == 0) return false;
 
             Transaction tx = (Transaction)ExecutionEngine.ScriptContainer;
             if (Storage.Get(Context(), "lastMintTxn") == tx.Hash) return false;
-            ulong sentAmount = GetSentAssets(false);
+            ulong sentAmount = GetSentAssets(useGas);
             Storage.Put(Context(), "lastMintTxn", tx.Hash);
             if (!HasSaleStarted() || HasSaleEnded())
             {
                 Refund(sender, sentAmount);
                 return false;
             }
-            ulong exchangeRate = ExchangeRate(false);
+            ulong exchangeRate = ExchangeRate(useGas);
             BigInteger mintedAmount = GetMintedAmount(sender, sentAmount, exchangeRate);
             if (mintedAmount <= 0) return false;
             Storage.Put(Context(), sender, mintedAmount + BalanceOf(sender));
