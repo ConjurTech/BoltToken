@@ -74,17 +74,16 @@ namespace BoltToken
                 if (operation == "transfer")
                 {
                     if (args.Length != 3) return false;
-                    return Transfer((byte[])args[0], (byte[])args[1], (BigInteger)args[2]);
+                    return Transfer((byte[])args[0], (byte[])args[1], (BigInteger)args[2], ExecutionEngine.CallingScriptHash);
                 }
                 if (operation == "mintTokens")
                 {
-                    var success = MintTokens(false);
-                    return MintTokens(true) || success;
+                    return MintTokens(false);
                 }
                 if (operation == "burnTokens")
                 {
                     if (args.Length != 3) return false;
-                    return BurnTokens((byte[])args[0], (BigInteger)args[1], (byte[])args[1]);
+                    return BurnTokens((byte[])args[0], (BigInteger)args[1], (byte[])args[1], ExecutionEngine.CallingScriptHash);
                 }
                 if (operation == "setSaleConfig")
                 {
@@ -156,12 +155,13 @@ namespace BoltToken
             return Storage.Get(Context(), address).AsBigInteger();
         }
 
-        public static bool Transfer(byte[] from, byte[] to, BigInteger amount)
+        public static bool Transfer(byte[] from, byte[] to, BigInteger amount, byte[] caller)
         {
             if (from.Length != 20 || to.Length != 20) return false;
             if (amount < 0) return false;
-            if (!Runtime.CheckWitness(from) && from != ExecutionEngine.CallingScriptHash) return false;
+            if (!Runtime.CheckWitness(from) && !(from == caller && caller != ExecutionEngine.ExecutingScriptHash)) return false;
             if (!CanTransfer() && from != Owner) return false;
+
             if (from == to) return true;
             if (amount == 0) return true;
 
@@ -190,15 +190,19 @@ namespace BoltToken
 
         private static bool MintTokens(bool useGas)
         {
-            byte[] sender = GetSender(useGas);
+            byte[] sender = GetSender(false);
             if (sender.Length == 0) return false;
-            ulong sentAmount = GetSentAssets(useGas);
+
+            Transaction tx = (Transaction)ExecutionEngine.ScriptContainer;
+            if (Storage.Get(Context(), "lastMintTxn") == tx.Hash) return false;
+            ulong sentAmount = GetSentAssets(false);
+            Storage.Put(Context(), "lastMintTxn", tx.Hash);
             if (!HasSaleStarted() || HasSaleEnded())
             {
                 Refund(sender, sentAmount);
                 return false;
             }
-            ulong exchangeRate = ExchangeRate(useGas);
+            ulong exchangeRate = ExchangeRate(false);
             BigInteger mintedAmount = GetMintedAmount(sender, sentAmount, exchangeRate);
             if (mintedAmount <= 0) return false;
             Storage.Put(Context(), sender, mintedAmount + BalanceOf(sender));
@@ -207,12 +211,13 @@ namespace BoltToken
             return true;
         }
 
-        private static bool BurnTokens(byte[] address, BigInteger amount, byte[] data)
+        private static bool BurnTokens(byte[] address, BigInteger amount, byte[] data, byte[] caller)
         {
             if (data.Length != 20) return false;
-            bool success = Transfer(address, null, amount);
-            if (success) Burnt(address, amount, data);
-            return success;
+            if (!Transfer(address, null, amount, caller)) return false;
+            Storage.Put(Context(), "totalSupply", TotalSupply() - amount);
+            Burnt(address, amount, data);
+            return true;
         }
 
         private static ulong ExchangeRate(bool useGas)
@@ -258,9 +263,6 @@ namespace BoltToken
             Transaction tx = (Transaction)ExecutionEngine.ScriptContainer;
             byte[] assetID = useGas ? gasAssetID : neoAssetID;
 
-            // Check for double spend, remove if NEP-7 is available
-            if (Storage.Get(Context(), tx.Hash.Concat(assetID)).Length > 0) return 0;
-
             TransactionOutput[] outputs = tx.GetOutputs();
             ulong value = 0;
             foreach (TransactionOutput output in outputs)
@@ -270,8 +272,6 @@ namespace BoltToken
                     value += (ulong)output.Value;
                 }
             }
-
-            Storage.Put(Context(), tx.Hash.Concat(assetID), "spent");
             return value;
         }
 
