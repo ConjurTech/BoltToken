@@ -24,6 +24,8 @@ namespace BoltToken
         private static readonly byte[] gasAssetID = { 231, 45, 40, 105, 121, 238, 108, 177, 183, 230, 93, 253, 223, 178, 227, 132, 16, 11, 141, 20, 142, 119, 88, 222, 66, 228, 22, 139, 113, 121, 44, 96 };
         private const ulong assetFactor = 100000000; // for neo and gas
         private const uint oneDay = 24 * 60 * 60; // 24 hrs in seconds
+        private static readonly byte[] tier1 = { 1 };
+        private static readonly byte[] tier2 = { 2 };
 
         // Token Settings
         public static string Name() => "Bolt Token";
@@ -95,24 +97,24 @@ namespace BoltToken
                 {
                     if (args.Length != 2) return false;
                     if (!Runtime.CheckWitness(Owner)) return false;
-                    return AddToWhitelist((byte[])args[0], (string)args[1]);
+                    return AddToWhitelist((byte[])args[0], (byte[])args[1]);
                 }
                 if (operation == "removeFromWhitelist")
                 {
                     if (args.Length != 2) return false;
                     if (!Runtime.CheckWitness(Owner)) return false;
-                    return RemoveFromWhitelist((byte[])args[0], (string)args[1]);
+                    return RemoveFromWhitelist((byte[])args[0], (byte[])args[1]);
                 }
                 if (operation == "isInWhitelist")
                 {
                     if (args.Length != 2) return false;
-                    return IsInWhitelist((byte[])args[0], (string)args[1]);
+                    return IsInWhitelist((byte[])args[0], (byte[])args[1]);
                 }
                 if (operation == "totalWhitelisted")
                 {
                     if (args.Length != 1) return false;
-                    var tier = (string)args[0];
-                    if (tier != "1" || tier != "2") return false;
+                    var tier = (byte[])args[0];
+                    if (!(tier == tier1 || tier == tier2)) return false;
                     return WhitelistTotalKey(tier).AsBigInteger();
                 }
                 if (operation == "enableTransfers")
@@ -280,12 +282,12 @@ namespace BoltToken
             BigInteger individualCap = 0;
 
             // Calculate cap based on tier
-            bool inTier1 = IsInWhitelist(sender, "1");
-            if (IsInWhitelist(sender, "1")) individualCap = tier1Hardcap;
+            bool inTier1 = IsInWhitelist(sender, tier1);
+            if (IsInWhitelist(sender, tier1)) individualCap = tier1Hardcap;
 
             if (individualCap == 0)
             {
-                if (IsInWhitelist(sender, "2")) individualCap = tier2Hardcap;
+                if (IsInWhitelist(sender, tier2)) individualCap = tier2Hardcap;
             }
 
             if (individualCap == 0)
@@ -321,7 +323,7 @@ namespace BoltToken
             return individualCap;
         }
 
-        private static bool AddToWhitelist(byte[] address, string tier)
+        private static bool AddToWhitelist(byte[] address, byte[] tier)
         {
             if (address.Length != 20) return false;
             if (IsInWhitelist(address, tier)) return false;
@@ -329,10 +331,11 @@ namespace BoltToken
             var prevTotal = Storage.Get(Context(), totalKey).AsBigInteger();
             Storage.Put(Context(), totalKey, prevTotal + 1);
             Storage.Put(Context(), WhitelistKey(address, tier), 1);
+            Runtime.Log("Added to whitelist");
             return true;
         }
 
-        private static bool RemoveFromWhitelist(byte[] address, string tier)
+        private static bool RemoveFromWhitelist(byte[] address, byte[] tier)
         {
             if (address.Length != 20) return false;
             if (!IsInWhitelist(address, tier)) return false;
@@ -340,10 +343,11 @@ namespace BoltToken
             var prevTotal = Storage.Get(Context(), totalKey).AsBigInteger();
             Storage.Put(Context(), totalKey, prevTotal - 1);
             Storage.Delete(Context(), WhitelistKey(address, tier));
+            Runtime.Log("Removed from whitelist");
             return true;
         }
         
-        private static bool IsInWhitelist(byte[] address, string tier)
+        private static bool IsInWhitelist(byte[] address, byte[] tier)
         {
             return Storage.Get(Context(), WhitelistKey(address, tier)).Length > 0;
         }
@@ -373,7 +377,7 @@ namespace BoltToken
         // Keys
         private static byte[] BalanceKey(byte[] address) => "balanceOf".AsByteArray().Concat(address);
         private static byte[] MintedAmountKey(byte[] address) => "mintedAmount".AsByteArray().Concat(address);
-        private static byte[] WhitelistKey(byte[] address, string tier) => ("whitelist" + tier).AsByteArray().Concat(address);
-        private static byte[] WhitelistTotalKey(string tier) => ("totalWhitelisted" + tier).AsByteArray();
+        private static byte[] WhitelistKey(byte[] address, byte[] tier) => "whitelist".AsByteArray().Concat(tier).Concat(address);
+        private static byte[] WhitelistTotalKey(byte[] tier) => ("totalWhitelisted").AsByteArray().Concat(tier);
     }
 }
