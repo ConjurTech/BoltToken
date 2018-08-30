@@ -115,7 +115,7 @@ namespace BoltToken
                     if (args.Length != 1) return false;
                     var tier = (byte[])args[0];
                     if (!(tier == tier1 || tier == tier2)) return false;
-                    return WhitelistTotalKey(tier).AsBigInteger();
+                    return WhitelistTotal(tier);
                 }
                 if (operation == "enableTransfers")
                 {
@@ -321,6 +321,11 @@ namespace BoltToken
             if (individualCap > remainingHardCap) return remainingHardCap;
 
             return individualCap;
+        }
+
+        private static BigInteger WhitelistTotal(byte[] tier)
+        {
+            return Storage.Get(Context(), WhitelistTotalKey(tier)).AsBigInteger();
         }
 
         private static bool AddToWhitelist(byte[] address, byte[] tier)
