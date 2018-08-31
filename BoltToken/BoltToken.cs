@@ -32,7 +32,7 @@ namespace BoltToken
         public static string Symbol() => "BOLT";
         public static byte Decimals() => 8;
         private const ulong factor = 100000000; // decided by Decimals()
-        private static readonly byte[] Owner = "ANFDcXqVBBSTTukbkj8ATYWi6w5TYEQRtK".ToScriptHash();
+        private static readonly byte[] Owner = "AHDfSLZANnJ4N9Rj3FCokP14jceu3u7Bvw".ToScriptHash();
 
         // ICO settings
         private const ulong presaleAmount = 800_000_000 * factor; // private sale amount
@@ -181,11 +181,14 @@ namespace BoltToken
 
         private static bool SetSaleConfig(BigInteger saleStartTime, BigInteger tokensForOneNeo, BigInteger tokensForOneGas)
         {
-            if (HasSaleStarted()) return false;
+            // TODO: Set this back once tested
+            // if (HasSaleStarted()) return false;
 
             Storage.Put(Context(), "saleStartTime", saleStartTime);
             Storage.Put(Context(), "tokensForOneNeo", tokensForOneNeo);
             Storage.Put(Context(), "tokensForOneGas", tokensForOneGas);
+
+            Runtime.Log("Config Set");
 
             return true;
         }
@@ -366,7 +369,7 @@ namespace BoltToken
         private static bool HasSaleEnded()
         {
             var saleStartTime = SaleStartTime();
-            return saleStartTime != 0 && saleStartTime + oneDay * 3 >= Runtime.Time;
+            return saleStartTime != 0 && saleStartTime + oneDay * 3 < Runtime.Time;
         }
 
         private static bool CanTransfer()
